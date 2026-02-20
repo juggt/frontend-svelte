@@ -1,13 +1,15 @@
-import { base, login } from "./helpers/util.mjs";
+import { base, login, waitForForm } from "./helpers/util.mjs";
 
 fixture`Admin`.page`${base}`;
 
 const category = "CAT3";
 
 test("category insert and backup", async t => {
-  await t.navigateTo(`${base}/category/add`);
-
+  await t.navigateTo(base);
   await login(t, { user: "admin1", password: "secret" });
+  await t.navigateTo(`${base}/category/add`);
+  await waitForForm(t);
+
   await t.takeScreenshot({
     path: "admin_after_login.png"
   });

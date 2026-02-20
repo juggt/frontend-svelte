@@ -1,5 +1,5 @@
 import { Selector } from "testcafe";
-import { base, login, clickLink } from "./helpers/util.mjs";
+import { base, login, clickLink, waitForForm } from "./helpers/util.mjs";
 
 fixture`Delete Values`.page`${base}`;
 
@@ -21,9 +21,10 @@ find one element to delete and check if this doesn exists more
 */
 
 test("delete values from a category", async t => {
-  await t.navigateTo(`${base}/category/add`);
-
+  await t.navigateTo(base);
   await login(t);
+  await t.navigateTo(`${base}/category/add`);
+  await waitForForm(t);
 
   await t
     .typeText("#name", category, { replace: true })
