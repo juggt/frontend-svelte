@@ -3,6 +3,7 @@
   import { CommandButton } from "svelte-command";
   import { Value } from "@konsumation/model";
   import { parseDate } from "../date.mjs";
+  import MeterPhoto from "./MeterPhoto.svelte";
 
   let { category } = $props();
 
@@ -52,6 +53,14 @@
   const valuePlaceholder = $derived(
     category.fractionalDigits > 0 ? "0." + "0".repeat(category.fractionalDigits) : "0"
   );
+
+  function onPhotoValue(recognized) {
+    // Round to fractionalDigits if needed
+    const num = parseFloat(recognized);
+    if (!isNaN(num)) {
+      value = num.toFixed(category.fractionalDigits ?? 0);
+    }
+  }
 </script>
 
 <fieldset>
@@ -77,6 +86,7 @@
       onaccept={accept}
       bind:value={value}
     />
+    <MeterPhoto onValue={onPhotoValue} />
   </label>
   <CommandButton {command} />
 </fieldset>
