@@ -94,29 +94,82 @@
     runOcr(file, fileDate);
   }
 
+  // ── Image pre-processing for better 7-segment OCR ───────────
+  async function preprocessImage(source) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+
+        // Crop to the lower-center third where meter display typically sits
+        // (roughly 55%–85% vertical, center 70% horizontal)
+        const cx = Math.floor(w * 0.15);
+        const cy = Math.floor(h * 0.55);
+        const cw = Math.floor(w * 0.70);
+        const ch = Math.floor(h * 0.30);
+
+        // Scale up 2× for better OCR
+        const scale = 2;
+        const out = document.createElement("canvas");
+        out.width  = cw * scale;
+        out.height = ch * scale;
+        const ctx = out.getContext("2d");
+
+        ctx.drawImage(img, cx, cy, cw, ch, 0, 0, out.width, out.height);
+
+        // Grayscale + contrast boost
+        const id = ctx.getImageData(0, 0, out.width, out.height);
+        const d  = id.data;
+        for (let i = 0; i < d.length; i += 4) {
+          // Luminance → grayscale
+          const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          // High-contrast: push toward black/white
+          const contrast = Math.min(255, Math.max(0, (gray - 128) * 2.5 + 128));
+          d[i] = d[i + 1] = d[i + 2] = contrast;
+        }
+        ctx.putImageData(id, 0, 0);
+        resolve(out.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+
+      if (source instanceof File || source instanceof Blob) {
+        img.src = URL.createObjectURL(source);
+      } else {
+        img.src = source;
+      }
+    });
+  }
+
   // ── OCR ─────────────────────────────────────────────────────
   async function runOcr(source, date = null) {
     phase = "processing";
     errorMsg = "";
     recognized = "";
     recognizedDate = date instanceof Date ? date : null;
+
+    // Test hook: set window.__OCR_MOCK__ = "1234.5" to bypass real OCR
+    if (typeof window !== "undefined" && window.__OCR_MOCK__ != null) {
+      recognized = String(window.__OCR_MOCK__);
+      phase = "done";
+      return;
+    }
+
     try {
-      const worker = await createWorker("eng", 1, {
-        // Suppress verbose Tesseract logs
-        logger: () => {}
-      });
+      // Pre-process image to improve 7-segment recognition
+      const processed = await preprocessImage(source);
+
+      const worker = await createWorker("eng", 1, { logger: () => {} });
       await worker.setParameters({
         tessedit_char_whitelist: "0123456789.,",
         tessedit_pageseg_mode: "7" // SINGLE_LINE
       });
-      const { data } = await worker.recognize(source);
+      const { data } = await worker.recognize(processed);
       await worker.terminate();
 
-      // Extract first plausible number
       const raw = data.text.trim();
-      const match = raw.match(/[\d]+([.,]\d+)?/);
+      const match = raw.match(/\d+([.,]\d+)?/);
       if (match) {
-        // Normalize comma → dot for decimal
         recognized = match[0].replace(",", ".");
         phase = "done";
       } else {
