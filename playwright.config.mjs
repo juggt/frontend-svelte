@@ -10,7 +10,7 @@ export default defineConfig({
   reporter: [["html", { outputFolder: "build/playwright-report" }], ["list"]],
 
   use: {
-    baseURL: "http://localhost:5173/services/konsum",
+    baseURL: "http://localhost:5173",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     trace: "retain-on-failure",
@@ -26,7 +26,7 @@ export default defineConfig({
   // Start vite dev server (with konsum backend) before tests
   webServer: {
     command: "npm run start",
-    url: "http://localhost:5173/services/konsum",
+    url: "http://localhost:5173",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
     stdout: "pipe",

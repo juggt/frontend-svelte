@@ -1,4 +1,4 @@
-export const BASE = "http://localhost:5173/services/konsum";
+export const BASE = "http://localhost:5173";
 
 export const USERS = {
   user1: { username: "user1", password: "secret_1234" },
