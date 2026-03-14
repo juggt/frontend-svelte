@@ -1,13 +1,19 @@
 <script>
   import { createWorker } from "tesseract.js";
+  import exifr from "exifr";
 
-  /** Called with the recognized numeric string when OCR succeeds */
+  /**
+   * Called when OCR succeeds.
+   * @param {string} value  - recognized numeric string
+   * @param {Date|null} date - EXIF date from file, or Date.now() from camera, or null
+   */
   let { onValue } = $props();
 
   let open = $state(false);
   let phase = $state("idle"); // idle | processing | done | error
   let previewUrl = $state(null);
   let recognized = $state("");
+  let recognizedDate = $state(/** @type {Date|null} */ (null));
   let errorMsg = $state("");
   let videoStream = $state(null);
   let videoEl = $state(null);
@@ -58,27 +64,42 @@
 
   function captureSnapshot() {
     if (!videoEl || !canvasEl) return;
+    const now = new Date(); // capture time before any async work
     canvasEl.width = videoEl.videoWidth;
     canvasEl.height = videoEl.videoHeight;
     canvasEl.getContext("2d").drawImage(videoEl, 0, 0);
     previewUrl = canvasEl.toDataURL("image/png");
     stopCamera();
-    runOcr(previewUrl);
+    runOcr(previewUrl, now);
   }
 
   // ── File upload ──────────────────────────────────────────────
-  function handleFile(e) {
+  async function handleFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     previewUrl = URL.createObjectURL(file);
-    runOcr(file);
+
+    // Extract EXIF date (DateTimeOriginal → DateTime → file lastModified)
+    let fileDate = null;
+    try {
+      const exif = await exifr.parse(file, ["DateTimeOriginal", "DateTime"]);
+      fileDate = exif?.DateTimeOriginal ?? exif?.DateTime ?? null;
+    } catch {
+      // no EXIF → fall back to file modification time
+    }
+    if (!fileDate && file.lastModified) {
+      fileDate = new Date(file.lastModified);
+    }
+
+    runOcr(file, fileDate);
   }
 
   // ── OCR ─────────────────────────────────────────────────────
-  async function runOcr(source) {
+  async function runOcr(source, date = null) {
     phase = "processing";
     errorMsg = "";
     recognized = "";
+    recognizedDate = date instanceof Date ? date : null;
     try {
       const worker = await createWorker("eng", 1, {
         // Suppress verbose Tesseract logs
@@ -109,7 +130,7 @@
   }
 
   function accept() {
-    onValue(recognized);
+    onValue(recognized, recognizedDate);
     close();
   }
 </script>
@@ -183,6 +204,16 @@
     {#if phase === "done"}
       <div class="result">
         <p class="status success">✅ Erkannt: <strong>{recognized}</strong></p>
+        {#if recognizedDate}
+          <p class="status date-hint">
+            🕐 Datum: <strong>{recognizedDate.toLocaleString("de-DE")}</strong>
+            {#if !previewUrl?.startsWith("data:")}
+              <span class="date-source">(aus EXIF)</span>
+            {:else}
+              <span class="date-source">(Aufnahmezeit)</span>
+            {/if}
+          </p>
+        {/if}
         <div class="result-actions">
           <button type="button" class="action-btn primary" onclick={accept}>
             Wert übernehmen
@@ -304,9 +335,11 @@
     margin: 0.5rem 0;
     font-size: 0.95rem;
   }
-  .processing { color: var(--color-muted, #666); }
-  .success    { color: #2e7d32; }
-  .error      { color: #c62828; }
+  .processing  { color: var(--color-muted, #666); }
+  .success     { color: #2e7d32; }
+  .error       { color: #c62828; }
+  .date-hint   { color: var(--color-muted, #555); margin-top: 0.25rem; }
+  .date-source { font-size: 0.8rem; opacity: 0.7; margin-left: 0.25rem; }
 
   .result { margin-top: 0.5rem; }
   .result-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }

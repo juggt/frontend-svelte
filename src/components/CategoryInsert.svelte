@@ -54,11 +54,18 @@
     category.fractionalDigits > 0 ? "0." + "0".repeat(category.fractionalDigits) : "0"
   );
 
-  function onPhotoValue(recognized) {
-    // Round to fractionalDigits if needed
+  /**
+   * @param {string} recognized - numeric string from OCR
+   * @param {Date|null} photoDate - EXIF date (upload) or capture time (camera)
+   */
+  function onPhotoValue(recognized, photoDate) {
     const num = parseFloat(recognized);
     if (!isNaN(num)) {
       value = num.toFixed(category.fractionalDigits ?? 0);
+    }
+    if (photoDate instanceof Date && !isNaN(photoDate)) {
+      const pad = n => String(n).padStart(2, "0");
+      date = `${photoDate.getFullYear()}-${pad(photoDate.getMonth() + 1)}-${pad(photoDate.getDate())}T${pad(photoDate.getHours())}:${pad(photoDate.getMinutes())}:${pad(photoDate.getSeconds())}`;
     }
   }
 </script>
