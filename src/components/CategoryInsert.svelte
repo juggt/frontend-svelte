@@ -93,7 +93,7 @@
       onaccept={accept}
       bind:value={value}
     />
-    <MeterPhoto onValue={onPhotoValue} />
+    <MeterPhoto category={category.name} onValue={onPhotoValue} />
   </label>
   <CommandButton {command} />
 </fieldset>

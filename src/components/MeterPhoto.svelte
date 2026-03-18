@@ -1,13 +1,12 @@
 <script>
-  import { createWorker } from "tesseract.js";
-  import exifr from "exifr";
+  import { api } from "../constants.mjs";
+  import { session } from "../util.mjs";
 
   /**
-   * Called when OCR succeeds.
-   * @param {string} value  - recognized numeric string
-   * @param {Date|null} date - EXIF date from file, or Date.now() from camera, or null
+   * @param {string} category  - category name (for API endpoint)
+   * @param {Function} onValue - called with (value: string, date: Date|null) on success
    */
-  let { onValue } = $props();
+  let { category, onValue } = $props();
 
   let open = $state(false);
   let phase = $state("idle"); // idle | processing | done | error
@@ -19,7 +18,8 @@
   let videoEl = $state(null);
   let cameraActive = $state(false);
   let canvasEl = $state(null);
-  let fileInput = $state(null);
+  let captureDate = $state(/** @type {Date|null} */ (null));
+  let dateSource = $state(/** @type {"exif"|"capture"|null} */ (null));
 
   function show() {
     open = true;
@@ -27,6 +27,8 @@
     previewUrl = null;
     recognized = "";
     errorMsg = "";
+    captureDate = null;
+    dateSource = null;
   }
 
   function close() {
@@ -41,7 +43,6 @@
         video: { facingMode: "environment", width: { ideal: 1920 } }
       });
       cameraActive = true;
-      // bind stream after videoEl is mounted
     } catch (e) {
       errorMsg = "Kamera nicht verfügbar: " + e.message;
       phase = "error";
@@ -64,13 +65,13 @@
 
   function captureSnapshot() {
     if (!videoEl || !canvasEl) return;
-    const now = new Date(); // capture time before any async work
+    captureDate = new Date(); // camera has no EXIF → use capture time
     canvasEl.width = videoEl.videoWidth;
     canvasEl.height = videoEl.videoHeight;
     canvasEl.getContext("2d").drawImage(videoEl, 0, 0);
-    previewUrl = canvasEl.toDataURL("image/png");
+    previewUrl = canvasEl.toDataURL("image/jpeg", 0.92);
     stopCamera();
-    runOcr(previewUrl, now);
+    runRecognition(previewUrl, "image/jpeg");
   }
 
   // ── File upload ──────────────────────────────────────────────
@@ -78,106 +79,70 @@
     const file = e.target.files?.[0];
     if (!file) return;
     previewUrl = URL.createObjectURL(file);
+    captureDate = null; // backend extracts EXIF date
 
-    // Extract EXIF date (DateTimeOriginal → DateTime → file lastModified)
-    let fileDate = null;
-    try {
-      const exif = await exifr.parse(file, ["DateTimeOriginal", "DateTime"]);
-      fileDate = exif?.DateTimeOriginal ?? exif?.DateTime ?? null;
-    } catch {
-      // no EXIF → fall back to file modification time
-    }
-    if (!fileDate && file.lastModified) {
-      fileDate = new Date(file.lastModified);
-    }
-
-    runOcr(file, fileDate);
+    // Convert to base64 and send to backend
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = /** @type {string} */ (reader.result);
+      const base64 = dataUrl.split(",")[1];
+      runRecognition(base64, file.type || "image/jpeg", true);
+    };
+    reader.readAsDataURL(file);
   }
 
-  // ── Image pre-processing for better 7-segment OCR ───────────
-  async function preprocessImage(source) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const w = img.naturalWidth;
-        const h = img.naturalHeight;
-
-        // Crop to the lower-center third where meter display typically sits
-        // (roughly 55%–85% vertical, center 70% horizontal)
-        const cx = Math.floor(w * 0.15);
-        const cy = Math.floor(h * 0.55);
-        const cw = Math.floor(w * 0.70);
-        const ch = Math.floor(h * 0.30);
-
-        // Scale up 2× for better OCR
-        const scale = 2;
-        const out = document.createElement("canvas");
-        out.width  = cw * scale;
-        out.height = ch * scale;
-        const ctx = out.getContext("2d");
-
-        ctx.drawImage(img, cx, cy, cw, ch, 0, 0, out.width, out.height);
-
-        // Grayscale + contrast boost
-        const id = ctx.getImageData(0, 0, out.width, out.height);
-        const d  = id.data;
-        for (let i = 0; i < d.length; i += 4) {
-          // Luminance → grayscale
-          const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-          // High-contrast: push toward black/white
-          const contrast = Math.min(255, Math.max(0, (gray - 128) * 2.5 + 128));
-          d[i] = d[i + 1] = d[i + 2] = contrast;
-        }
-        ctx.putImageData(id, 0, 0);
-        resolve(out.toDataURL("image/png"));
-      };
-      img.onerror = reject;
-
-      if (source instanceof File || source instanceof Blob) {
-        img.src = URL.createObjectURL(source);
-      } else {
-        img.src = source;
-      }
-    });
-  }
-
-  // ── OCR ─────────────────────────────────────────────────────
-  async function runOcr(source, date = null) {
+  // ── Backend API recognition ──────────────────────────────────
+  async function runRecognition(imageData, mimeType, isBase64 = false) {
     phase = "processing";
     errorMsg = "";
     recognized = "";
-    recognizedDate = date instanceof Date ? date : null;
-
-    // Test hook: set window.__OCR_MOCK__ = "1234.5" to bypass real OCR
-    if (typeof window !== "undefined" && window.__OCR_MOCK__ != null) {
-      recognized = String(window.__OCR_MOCK__);
-      phase = "done";
-      return;
-    }
+    recognizedDate = null;
 
     try {
-      // Pre-process image to improve 7-segment recognition
-      const processed = await preprocessImage(source);
+      // If imageData is a data URL (from camera canvas), extract base64
+      const base64 = isBase64
+        ? imageData
+        : imageData.startsWith("data:")
+          ? imageData.split(",")[1]
+          : imageData;
 
-      const worker = await createWorker("eng", 1, { logger: () => {} });
-      await worker.setParameters({
-        tessedit_char_whitelist: "0123456789.,",
-        tessedit_pageseg_mode: "7" // SINGLE_LINE
-      });
-      const { data } = await worker.recognize(processed);
-      await worker.terminate();
+      const response = await fetch(
+        `${api}/category/${category}/meter-photo`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...session.authorizationHeader
+          },
+          body: JSON.stringify({ image: base64, mimeType })
+        }
+      );
 
-      const raw = data.text.trim();
-      const match = raw.match(/\d+([.,]\d+)?/);
-      if (match) {
-        recognized = match[0].replace(",", ".");
-        phase = "done";
-      } else {
-        errorMsg = `Keine Zahl erkannt. (OCR-Text: "${raw}")`;
-        phase = "error";
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`API ${response.status}: ${text}`);
       }
+
+      const result = await response.json();
+
+      if (!result.value) {
+        throw new Error(`Keine Zahl erkannt (Antwort: "${result.raw}")`);
+      }
+
+      recognized = result.value;
+
+      // Use backend EXIF date, or fall back to camera capture time
+      if (result.date) {
+        recognizedDate = new Date(result.date);
+        dateSource = "exif";
+      } else if (captureDate) {
+        recognizedDate = captureDate;
+        dateSource = "capture";
+      }
+
+      phase = "done";
     } catch (e) {
-      errorMsg = "OCR-Fehler: " + e.message;
+      errorMsg = e.message;
       phase = "error";
     }
   }
@@ -219,7 +184,6 @@
         <label class="action-btn">
           📁 Aus Galerie
           <input
-            bind:this={fileInput}
             type="file"
             accept="image/*"
             hidden
@@ -271,11 +235,9 @@
         {#if recognizedDate}
           <p class="status date-hint">
             🕐 Datum: <strong>{recognizedDate.toLocaleString("de-DE")}</strong>
-            {#if !previewUrl?.startsWith("data:")}
-              <span class="date-source">(aus EXIF)</span>
-            {:else}
-              <span class="date-source">(Aufnahmezeit)</span>
-            {/if}
+            <span class="date-source">
+              {dateSource === "exif" ? "(aus EXIF)" : "(Aufnahmezeit)"}
+            </span>
           </p>
         {/if}
         <div class="result-actions">
@@ -333,6 +295,18 @@
     overflow-y: auto;
   }
 
+  @media (max-width: 640px) {
+    .modal {
+      top: auto;
+      bottom: 0;
+      left: 0;
+      transform: none;
+      width: 100vw;
+      border-radius: 12px 12px 0 0;
+      max-height: 92vh;
+    }
+  }
+
   .modal-header {
     display: flex;
     justify-content: space-between;
@@ -357,13 +331,14 @@
   }
 
   .action-btn {
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1rem;
     border: 1px solid var(--border-color, #ccc);
     border-radius: 4px;
     cursor: pointer;
     background: var(--background-color, #fff);
     color: var(--color, inherit);
     font-size: 0.95rem;
+    min-height: 44px;
   }
   .action-btn:hover { background: var(--hover-bg, #f0f0f0); }
   .action-btn.primary {
