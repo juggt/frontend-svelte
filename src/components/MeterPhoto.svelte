@@ -205,8 +205,19 @@
 
     {#if phase === "idle" && !cameraActive}
       <div class="actions">
+        <label class="action-btn primary">
+          📷 Foto aufnehmen
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onchange={handleFile}
+          />
+        </label>
+
         <label class="action-btn">
-          📁 Foto hochladen
+          📁 Aus Galerie
           <input
             bind:this={fileInput}
             type="file"
@@ -216,9 +227,9 @@
           />
         </label>
 
-        {#if typeof navigator !== "undefined" && navigator.mediaDevices}
+        {#if typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia}
           <button type="button" class="action-btn" onclick={startCamera}>
-            📸 Kamera öffnen
+            🎥 Live-Kamera
           </button>
         {/if}
       </div>
