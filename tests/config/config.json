@@ -32,7 +32,7 @@
     },
     "jwt": {
       "options": {
-        "expiresIn": "1h"
+        "expiresIn": "24h"
       },
       "public": "${document('demo.rsa.pub')}",
       "private": "${document('demo.rsa')}"
