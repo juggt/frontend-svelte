@@ -23,17 +23,6 @@
   import { session } from "./util.mjs";
   import { base } from "./constants.mjs";
 
-  // Session-Timer nach Page-Reload wiederherstellen.
-  // token_type wird nicht in localStorage gespeichert → isValid ist nach Reload false.
-  // Fix: update() mit gespeichertem access_token + token_type aufrufen.
-  if (session.access_token && !session.isValid) {
-    session.update({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-      token_type: "bearer"
-    });
-  }
-
   const enshureSession = redirectGuard("/login", () => !session.isValid);
 </script>
 
