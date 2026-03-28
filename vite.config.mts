@@ -112,7 +112,9 @@ export default defineConfig(async ({ command, mode }) => {
       proxy: {
         [api]: {
           target: backend,
-          rewrite
+          rewrite,
+          timeout: 60000,        // 60s — AI-Vision-Requests brauchen bis zu 30s
+          proxyTimeout: 60000
         }
       }
     }
