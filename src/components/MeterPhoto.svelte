@@ -10,6 +10,7 @@
 
   let open = $state(false);
   let phase = $state("idle"); // idle | processing | done | error
+  let photoEnabled = $state(/** @type {boolean|null} */ (null)); // null = noch nicht geladen
   let previewUrl = $state(null);
   let recognized = $state("");
   let recognizedDate = $state(/** @type {Date|null} */ (null));
@@ -20,6 +21,16 @@
   let canvasEl = $state(null);
   let captureDate = $state(/** @type {Date|null} */ (null));
   let dateSource = $state(/** @type {"exif"|"capture"|null} */ (null));
+
+  // Status einmalig beim ersten Rendern holen
+  $effect(() => {
+    fetch(`${api}/meter-photo/status`, {
+      headers: session.authorizationHeader
+    })
+      .then(r => r.ok ? r.json() : { enabled: false })
+      .then(d => { photoEnabled = d.enabled; })
+      .catch(() => { photoEnabled = false; });
+  });
 
   function show() {
     open = true;
@@ -173,7 +184,14 @@
 </script>
 
 <!-- Trigger button -->
-<button type="button" class="photo-btn" title="Wert per Foto erkennen" onclick={show}>
+<button
+  type="button"
+  class="photo-btn"
+  class:disabled={photoEnabled === false}
+  title={photoEnabled === false ? "Foto-Erkennung nicht verfügbar: API-Key nicht konfiguriert" : "Wert per Foto erkennen"}
+  disabled={photoEnabled === false}
+  onclick={show}
+>
   📷
 </button>
 
@@ -290,7 +308,12 @@
     cursor: pointer;
     vertical-align: middle;
   }
-  .photo-btn:hover { background: var(--hover-bg, #f0f0f0); }
+  .photo-btn:hover:not(:disabled) { background: var(--hover-bg, #f0f0f0); }
+  .photo-btn:disabled,
+  .photo-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 
   .backdrop {
     position: fixed;
