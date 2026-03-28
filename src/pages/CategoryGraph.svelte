@@ -18,6 +18,7 @@
   if (vv) {
     let last = vv[0];
 
+    // svelte-ignore state_referenced_locally
     data = [];
     for (const c of vv) {
       const days = (c.time - last.time) / (24 * 60 * 60);

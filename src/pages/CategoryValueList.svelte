@@ -33,7 +33,9 @@
     }
   }, 1000);
 
+  // svelte-ignore state_referenced_locally
   const sortBy = keyPrefixStore(router.searchParamStore, "sort.");
+  // svelte-ignore state_referenced_locally
   const filterBy = keyPrefixStore(router.searchParamStore, "filter.");
 </script>
 
