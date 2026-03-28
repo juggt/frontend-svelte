@@ -3,6 +3,7 @@
 
   let { router } = $props();
 
+  // svelte-ignore state_referenced_locally
   const route = router.route;
   const categories = $route.value;
 </script>

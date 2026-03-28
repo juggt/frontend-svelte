@@ -6,6 +6,7 @@
 
   let { router } = $props();
 
+  // svelte-ignore state_referenced_locally
   const route = router.route;
   const category = $route.value;
 
@@ -25,8 +26,10 @@
 
   const command = category.saveCommand;
 
-  command.disabled =
-    !valid || !session.hasEntitlement("konsum.category.modify");
+  $effect(() => {
+    command.disabled =
+      !valid || !session.hasEntitlement("konsum.category.modify");
+  });
 </script>
 
 {#if category}

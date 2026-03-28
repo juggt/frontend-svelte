@@ -1,13 +1,15 @@
 <script>
+  import { untrack } from "svelte";
   import imask from "../imask.mjs";
 
   let { category, valid = $bindable(false) } = $props();
 
   // Local $state vars so $effect can track changes reactively
-  let name = $state(category.name ?? "");
-  let description = $state(category.description ?? "");
-  let unit = $state(category.unit ?? "");
-  let fractionalDigits = $state(category.fractionalDigits ?? "");
+  // untrack() — we only want the initial value, not a reactive dependency
+  let name = $state(untrack(() => category.name ?? ""));
+  let description = $state(untrack(() => category.description ?? ""));
+  let unit = $state(untrack(() => category.unit ?? ""));
+  let fractionalDigits = $state(untrack(() => category.fractionalDigits ?? ""));
 
   // Sync local state back to category — pure side effect, no valid computation
   $effect(() => {

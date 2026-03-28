@@ -10,10 +10,13 @@
 
   let { router } = $props();
 
+  // svelte-ignore state_referenced_locally
   const route = router.route;
   const categoryRoute = route.parent.parent;
+  // svelte-ignore state_referenced_locally
   const category = $categoryRoute.value;
 
+  // svelte-ignore state_referenced_locally
   let entries = $state($route.value ?? []);
 
   // Keep entries in sync when route value changes (e.g. navigating to different category)

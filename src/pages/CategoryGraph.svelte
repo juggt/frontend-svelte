@@ -7,8 +7,10 @@
 
   let { router } = $props();
 
+  // svelte-ignore state_referenced_locally
   const route = router.route;
 
+  // svelte-ignore state_referenced_locally
   let data = $state([]);
 
   const vv = $route.value;

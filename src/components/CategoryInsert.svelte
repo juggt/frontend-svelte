@@ -26,7 +26,7 @@
     return unsubscribe;
   });
 
-  const options = {
+  const options = $derived({
     mask: Number,
     scale: category.fractionalDigits,
     signed: false,
@@ -36,13 +36,14 @@
     radix: ".",
     min: 0,
     max: 999999
-  };
+  });
 
   function accept({ detail: maskRef }) {
     console.log("accept", maskRef.value);
     value = maskRef.value;
   }
 
+  // svelte-ignore state_referenced_locally
   const command = category.insertCommand(() => {
     return new Value({
       value: parseFloat(value),

@@ -4,6 +4,7 @@
 
   let { router } = $props();
 
+  // svelte-ignore state_referenced_locally
   const sortBy = keyPrefixStore(router.searchParamStore, "sort.");
 </script>
 
