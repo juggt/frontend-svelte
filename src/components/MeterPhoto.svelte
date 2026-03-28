@@ -75,20 +75,39 @@
   }
 
   // ── File upload ──────────────────────────────────────────────
+
+  /**
+   * Resize image to max 1280px on the long side and re-encode as JPEG 0.85.
+   * Handy-Fotos können 5–10MB sein — für OCR reicht 1280px völlig.
+   */
+  function resizeImage(file, maxPx = 1280, quality = 0.85) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const { naturalWidth: w, naturalHeight: h } = img;
+        const scale = Math.min(1, maxPx / Math.max(w, h));
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl.split(",")[1]);
+      };
+      img.src = url;
+    });
+  }
+
   async function handleFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     previewUrl = URL.createObjectURL(file);
     captureDate = null; // backend extracts EXIF date
 
-    // Convert to base64 and send to backend
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = /** @type {string} */ (reader.result);
-      const base64 = dataUrl.split(",")[1];
-      runRecognition(base64, file.type || "image/jpeg", true);
-    };
-    reader.readAsDataURL(file);
+    phase = "processing";
+    const base64 = await resizeImage(file);
+    runRecognition(base64, "image/jpeg", true);
   }
 
   // ── Backend API recognition ──────────────────────────────────
