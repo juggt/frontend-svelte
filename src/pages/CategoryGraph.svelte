@@ -16,22 +16,21 @@
   const vv = $route.value;
 
   if (vv) {
+    const points = [];
     let last = vv[0];
-
-    // svelte-ignore state_referenced_locally
-    data = [];
     for (const c of vv) {
       const days = (c.time - last.time) / (24 * 60 * 60);
       const y = (c.value - last.value) / days;
-
       if (c.time > 0 && y >= 0 && y < 30) {
         const x = c.time / (364.25 * 24 * 60 * 60) + 1970;
-        data.push({ x, y });
+        points.push({ x, y });
       } else {
         console.log(c.time / (364.25 * 24 * 60 * 60) + 1970);
       }
       last = c;
     }
+    // svelte-ignore state_referenced_locally
+    data = points;
   }
 </script>
 
